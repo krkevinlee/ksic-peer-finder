@@ -1,0 +1,79 @@
+name: daily-build
+
+on:
+  schedule:
+    - cron: "30 0 * * *"   # 매일 09:30 KST
+  workflow_dispatch:
+    inputs:
+      budget:
+        description: "DART 호출 상한"
+        default: "12000"
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: daily-build
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Restore cache (data branch)
+        run: |
+          if git ls-remote --exit-code origin refs/heads/data >/dev/null; then
+            git fetch --depth=1 origin data
+            mkdir -p cache && git --work-tree=cache checkout FETCH_HEAD -- .
+            git reset -q
+          fi
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build data
+        env:
+          DART_API_KEY: ${{ secrets.DART_API_KEY }}
+          KRX_API_KEY: ${{ secrets.KRX_API_KEY }}
+          CACHE_DIR: cache
+        run: python pipeline/build.py --budget "${{ github.event.inputs.budget || '12000' }}"
+
+      - name: Save cache (data branch, single commit)
+        run: |
+          cd cache
+          git init -q -b data
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -qm "cache $(date -u +%F)"
+          git push -qf "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" data:data
+
+      - name: Keep schedule alive (monthly commit)
+        run: |
+          m=$(TZ=Asia/Seoul date +%Y-%m)
+          if [ "$(cat KEEPALIVE 2>/dev/null)" != "$m" ]; then
+            echo "$m" > KEEPALIVE
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add KEEPALIVE && git commit -qm "keepalive $m" && git push -q
+          fi
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

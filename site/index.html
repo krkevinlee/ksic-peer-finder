@@ -1,0 +1,328 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b5d73">
+<title>업종 피어 파인더</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one narrow column — search, the KSIC ladder, then the peer ledger; tapping a row opens its numbers */
+:root{
+  --bg:#f3f5f7; --surface:#ffffff; --ink:#15202b; --muted:#5b6876; --line:#dde3ea;
+  --accent:#0b5d73; --accent-ink:#ffffff; --accent-soft:#e1eff2;
+  --kospi:#2a4fa3; --kospi-soft:#e5ebf8; --kosdaq:#9a4a12; --kosdaq-soft:#f8ebe0;
+  --neg:#b4232c; --warn:#8a5a00; --warn-soft:#fbf1dc;
+  --f-body:"IBM Plex Sans KR",system-ui,-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Consolas,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#0f1418; --surface:#171e24; --ink:#e4eaf0; --muted:#93a1ae; --line:#2a343d;
+  --accent:#5fb7cc; --accent-ink:#06222a; --accent-soft:#16323a;
+  --kospi:#8eaaf0; --kospi-soft:#1c2740; --kosdaq:#e8a571; --kosdaq-soft:#3a2617;
+  --neg:#f08a8a; --warn:#e6bb62; --warn-soft:#352a12; color-scheme:dark}}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.5}
+[hidden]{display:none!important}
+.wrap{max-width:760px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:calc(20px + env(safe-area-inset-top,0px)) 120px;display:flex;flex-direction:column;gap:18px}
+header h1{font-size:1.35rem;margin:0;letter-spacing:-.01em}
+header p{margin:4px 0 0;color:var(--muted);font-size:.85rem}
+.mono{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.search{display:flex;gap:8px}
+.search input{flex:1;min-width:0;font:inherit;font-size:16px;padding:12px 14px;border:1.5px solid var(--line);border-radius:10px;background:var(--surface);color:var(--ink)}
+.search input:focus{outline:none;border-color:var(--accent)}
+button{font:inherit;cursor:pointer;border-radius:10px;border:1.5px solid var(--line);background:var(--surface);color:var(--ink);padding:10px 14px}
+button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+button.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:600}
+button:disabled{opacity:.5;cursor:default}
+.hint{font-size:.8rem;color:var(--muted);margin-top:-8px;min-height:1.2em}
+.sugg{background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.sugg h3{margin:0;padding:8px 14px;font-size:.72rem;letter-spacing:.06em;color:var(--muted);background:var(--bg);font-weight:600}
+.sugg button{display:flex;width:100%;text-align:left;border:0;border-top:1px solid var(--line);border-radius:0;gap:10px;align-items:baseline;padding:11px 14px;background:transparent}
+.sugg button:hover{background:var(--accent-soft)}
+.sugg .nm{font-weight:600}
+.sugg .sub{color:var(--muted);font-size:.8rem;margin-left:auto;text-align:right}
+.sugg .empty{padding:14px;color:var(--muted);font-size:.85rem;border-top:1px solid var(--line)}
+.tag{font-size:.68rem;font-weight:600;padding:1px 6px;border-radius:4px;white-space:nowrap}
+.tag.KOSPI{background:var(--kospi-soft);color:var(--kospi)}
+.tag.KOSDAQ{background:var(--kosdaq-soft);color:var(--kosdaq)}
+.tag.UNL{background:var(--bg);color:var(--muted);border:1px solid var(--line)}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:12px}
+.target-head{display:flex;flex-wrap:wrap;align-items:baseline;gap:8px}
+.target-head h2{margin:0;font-size:1.2rem}
+.target-head .mono{color:var(--muted);font-size:.85rem}
+.ladder{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;border-left:2px solid var(--line);margin-left:4px}
+.ladder li{display:grid;grid-template-columns:5.2em 3.6em 1fr;gap:8px;padding:4px 0 4px 12px;font-size:.88rem;align-items:baseline}
+.ladder li .lv{color:var(--muted);font-size:.75rem}
+.ladder li.on{background:var(--accent-soft);border-radius:0 6px 6px 0;font-weight:600}
+.ladder li .cd{color:var(--accent);font-weight:500}
+.src{font-size:.78rem;color:var(--muted)}
+.note{font-size:.8rem;padding:8px 10px;border-radius:8px;background:var(--warn-soft);color:var(--warn)}
+.controls{display:flex;flex-direction:column;gap:10px}
+.seg{display:flex;flex-wrap:wrap;gap:6px}
+.seg button{padding:7px 11px;font-size:.82rem;border-radius:999px}
+.seg button[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:var(--bg)}
+.seg .lbl{font-size:.72rem;color:var(--muted);letter-spacing:.05em;align-self:center;width:4.6em}
+.ledger-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap}
+.ledger-head h2{margin:0;font-size:1rem}
+.count{font-size:.85rem;color:var(--muted)}
+.count b{color:var(--ink);font-size:1.1rem}
+.list{background:var(--surface);border:1px solid var(--line);border-radius:14px;overflow:hidden;margin-top:10px}
+.row{border-top:1px solid var(--line)}
+.row:first-child{border-top:0}
+.row>button{all:unset;box-sizing:border-box;cursor:pointer;display:grid;grid-template-columns:1fr auto;gap:2px 10px;padding:10px 14px;width:100%}
+.row>button:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.row.self>button{background:var(--accent-soft)}
+.row.open>button{background:var(--bg)}
+.row .nm{font-weight:600;min-width:0;overflow-wrap:anywhere}
+.row .tk{text-align:right;font-size:.9rem}
+.row .meta{grid-column:1/-1;font-size:.76rem;color:var(--muted);display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.row .meta .kv b{color:var(--ink);font-weight:500}
+.detail{padding:4px 14px 16px;display:flex;flex-direction:column;gap:12px;background:var(--bg)}
+.tbl{overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+.tbl table{border-collapse:collapse;width:100%;font-size:.8rem;min-width:520px}
+.tbl th,.tbl td{padding:7px 8px;text-align:right;white-space:nowrap;border-top:1px solid var(--line)}
+.tbl thead th{border-top:0;color:var(--muted);font-weight:500;font-size:.72rem}
+.tbl th:first-child,.tbl td:first-child{text-align:left;position:sticky;left:0;background:var(--surface)}
+.tbl .ltm{font-weight:600;background:var(--accent-soft)}
+.neg{color:var(--neg)}
+.mc{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px}
+.mc div{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:8px 10px}
+.mc span{display:block;font-size:.7rem;color:var(--muted)}
+.mc b{font-family:var(--f-mono);font-variant-numeric:tabular-nums;font-size:1rem;font-weight:500}
+.mc .per{border-color:var(--accent)}
+.mc .per b{color:var(--accent);font-weight:600}
+.mc .min b{text-decoration:underline;text-decoration-color:var(--accent);text-underline-offset:3px}
+.empty{padding:28px 16px;text-align:center;color:var(--muted);font-size:.9rem}
+.bar{position:fixed;left:0;right:0;bottom:0;background:var(--surface);border-top:1px solid var(--line);padding-top:10px;padding-bottom:calc(10px + env(safe-area-inset-bottom,0px));padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));z-index:5}
+.bar .in{max-width:760px;margin:0 auto;display:flex;gap:10px;align-items:center}
+.bar .in button{flex:1;padding:13px}
+.bar .msg{font-size:.78rem;color:var(--muted);max-width:45%}
+footer{font-size:.75rem;color:var(--muted);line-height:1.6}
+.loading{padding:40px 0;text-align:center;color:var(--muted)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>업종 피어 파인더</h1>
+    <p>기업명 → 표준산업분류(KSIC) → 같은 업종의 코스피·코스닥 상장사, 실적, 시가총액, PER</p>
+  </header>
+
+  <form class="search" id="f" autocomplete="off">
+    <input id="q" type="search" placeholder="기업명 또는 KSIC 코드 (예: 마이크로인피니티, 27211)" enterkeyhint="search">
+    <button class="primary" type="submit">찾기</button>
+  </form>
+  <div class="hint" id="hint"></div>
+
+  <div id="sugg" hidden></div>
+  <div class="loading" id="loading">데이터를 불러오는 중…</div>
+  <section class="card" id="target" hidden></section>
+
+  <section class="controls" id="controls" hidden>
+    <div class="seg" id="lvSeg"></div>
+    <div class="seg" id="mkSeg"></div>
+  </section>
+
+  <section id="ledger" hidden>
+    <div class="ledger-head">
+      <h2 id="ledTitle"></h2>
+      <span class="count" id="count"></span>
+    </div>
+    <div class="list" id="list"></div>
+  </section>
+
+  <footer id="foot"></footer>
+</div>
+
+<div class="bar" id="bar" hidden>
+  <div class="in">
+    <span class="msg" id="barMsg"></span>
+    <button class="primary" id="xl" type="button">엑셀로 받기</button>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+// row: [name, mkt, ticker, ksic, krxInd, products, corp, fs, qLabel, q[[rev,op,ni]x4], ltm[rev,op,ni], mcap[m0,m1,m3], per]
+const LEVELS=[[2,"중분류"],[3,"소분류"],[4,"세분류"],[5,"세세분류"]];
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const norm=s=>String(s||"").toLowerCase().replace(/[\s()㈜.,·\-]/g,"").replace(/^주식회사|주식회사$/g,"");
+const fmt=v=>v==null?"—":v.toLocaleString("ko-KR",{maximumFractionDigits:v!==0&&Math.abs(v)<10?1:0});
+const cell=v=>`<span class="${v!=null&&v<0?"neg":""}">${fmt(v)}</span>`;
+let K={}, C=[], META={}, UNL=null;
+const S={target:null,level:3,mk:{KOSPI:true,KOSDAQ:true},open:null};
+try{S.level=+localStorage.getItem("peer.lv")||3}catch(e){}
+
+function qLabels(last){ // "2026.2Q" -> 4 labels ending there
+  if(!last)return ["","","",""]; let [y,q]=[+last.slice(0,4),+last[5]]; const out=[];
+  for(let i=0;i<4;i++){out.unshift(`${y}.${q}Q`); q--; if(q===0){q=4;y--;}}
+  return out;
+}
+const minMcap=r=>{const v=r[11].filter(x=>x);return v.length?Math.min(...v):null};
+
+/* ---------- search ---------- */
+function localMatches(q){
+  const n=norm(q); if(!n)return [];
+  const out=[];
+  for(const c of C){const cn=norm(c[0]);
+    if(cn===n)out.unshift([0,c]);else if(cn.startsWith(n))out.push([1,c]);else if(cn.includes(n)||c[2]===q.trim())out.push([2,c]);}
+  return out.sort((a,b)=>a[0]-b[0]||a[1][0].length-b[1][0].length).map(x=>x[1]);
+}
+function industryMatches(q){
+  const n=norm(q); if(n.length<2)return [];
+  return Object.entries(K).filter(([cd,nm])=>norm(nm).includes(n)).sort((a,b)=>a[0].length-b[0].length||a[0].localeCompare(b[0])).slice(0,6);
+}
+async function loadUnl(){
+  if(!UNL){ $("hint").textContent="비상장사 목록을 불러오는 중…"; UNL=await fetch("data/unlisted.json").then(r=>r.json()); }
+  return UNL;
+}
+async function unlMatches(q){
+  const n=norm(q), u=await loadUnl(), out=[];
+  for(const r of u){const cn=norm(r[0]); if(cn===n)out.unshift([0,r]); else if(cn.includes(n))out.push([cn.startsWith(n)?1:2,r]); if(out.length>400)break;}
+  return out.sort((a,b)=>a[0]-b[0]||(b[1][2]?1:0)-(a[1][2]?1:0)||a[1][0].length-b[1][0].length).map(x=>x[1]).slice(0,12);
+}
+function renderSugg(q,local,inds,unl){
+  let h="";
+  if(local.length)h+=`<h3>상장사 ${local.length}곳</h3>`+local.slice(0,8).map(c=>`<button type="button" data-l="${c[2]}"><span class="tag ${c[1]}">${c[1]}</span><span class="nm">${esc(c[0])}</span><span class="sub mono">${c[2]} · ${c[3]||"—"}</span></button>`).join("");
+  if(inds.length)h+=`<h3>업종명 일치</h3>`+inds.map(([cd,nm])=>`<button type="button" data-k="${cd}"><span class="nm">${esc(nm)}</span><span class="sub mono">KSIC ${cd}</span></button>`).join("");
+  if(unl)h+=`<h3>비상장사</h3>`+(unl.length?unl.map(r=>`<button type="button" data-u="${r[1]}"><span class="tag UNL">비상장</span><span class="nm">${esc(r[0])}</span><span class="sub mono">${r[2]?"KSIC "+r[2]:"업종코드 수집 전"}</span></button>`).join(""):`<div class="empty">비상장사에서도 찾지 못했습니다. DART에 등록된 정식 회사명으로 입력해 보세요.</div>`);
+  else if(q)h+=`<button type="button" data-uq="${esc(q)}" style="color:var(--accent);font-weight:600">비상장사에서 '${esc(q)}' 찾기 →</button>`;
+  $("sugg").innerHTML=`<div class="sugg">${h}</div>`; $("sugg").hidden=!h;
+}
+async function searchUnl(q){
+  const local=localMatches(q), inds=industryMatches(q);
+  try{const u=await unlMatches(q); renderSugg(q,local,inds,u); $("hint").textContent=u.length?"회사를 고르세요.":"";}
+  catch(e){$("hint").textContent="비상장사 목록을 불러오지 못했습니다. 새로고침 후 다시 시도하세요.";}
+}
+function onSearch(q){
+  q=q.trim(); if(!q)return;
+  try{localStorage.setItem("peer.q",q)}catch(e){}
+  if(/^\d{2,5}$/.test(q)&&K[q])return selectCode(q);
+  const local=localMatches(q), inds=industryMatches(q);
+  if(local.length&&norm(local[0][0])===norm(q))return selectListed(local[0]);
+  if(local.length===1&&!inds.length)return selectListed(local[0]);
+  if(!local.length&&!inds.length)return searchUnl(q);
+  renderSugg(q,local,inds,null); $("hint").textContent="목록에서 고르거나, 비상장사면 아래 버튼을 누르세요.";
+}
+$("f").addEventListener("submit",e=>{e.preventDefault();onSearch($("q").value)});
+$("sugg").addEventListener("click",e=>{
+  const b=e.target.closest("button"); if(!b)return;
+  if(b.dataset.l)selectListed(C.find(c=>c[2]===b.dataset.l));
+  else if(b.dataset.k)selectCode(b.dataset.k);
+  else if(b.dataset.u){const r=UNL.find(x=>x[1]===b.dataset.u); selectUnlisted(r);}
+  else if(b.dataset.uq)searchUnl(b.dataset.uq);
+});
+
+/* ---------- target ---------- */
+function setTarget(t){S.target=t;S.open=null;$("sugg").hidden=true;$("hint").textContent="";render();}
+function selectCode(cd){setTarget({name:K[cd],code:cd,src:"직접 입력한 KSIC 코드"})}
+function selectListed(c){setTarget({name:c[0],ticker:c[2],mkt:c[1],code:c[3]||"",row:c,src:"DART 기업개황"})}
+function selectUnlisted(r){
+  if(!r[2]){$("hint").textContent=`${r[0]}의 업종코드는 아직 수집 전입니다. KSIC 코드를 알면 직접 입력하세요 (매일 조금씩 채워집니다).`;$("sugg").hidden=true;return;}
+  setTarget({name:r[0],code:r[2],unlisted:true,src:"DART 기업개황"});
+}
+
+/* ---------- peers ---------- */
+function peers(){
+  const t=S.target; if(!t||!t.code)return [];
+  const lv=Math.min(S.level,t.code.length), pre=t.code.slice(0,lv);
+  return C.filter(c=>S.mk[c[1]]&&c[3]&&c[3].startsWith(pre));
+}
+function detailHtml(r){
+  const L=qLabels(r[8]), q=r[9], ltm=r[10]||[null,null,null], m=r[11]||[null,null,null], mn=minMcap(r);
+  const fin=q?`<div class="tbl"><table><thead><tr><th>억원 · ${esc(r[7]||"")}</th>${L.map(l=>`<th class="mono">${l}</th>`).join("")}<th class="mono ltm">LTM</th></tr></thead><tbody>
+    ${["매출액","영업이익","지배주주순이익"].map((nm,i)=>`<tr><td>${nm}</td>${q.map(x=>`<td class="mono">${cell(x[i])}</td>`).join("")}<td class="mono ltm">${cell(ltm[i])}</td></tr>`).join("")}
+    </tbody></table></div>`:`<div class="note">DART 정기보고서 재무가 없습니다 (신규 상장 등).</div>`;
+  const lab=["어제 시총","1개월 평균","3개월 평균"];
+  const mc=`<div class="mc">${m.map((v,i)=>`<div class="${v&&v===mn?"min":""}"><span>${lab[i]}${i===0&&META.mcap?" ("+META.mcap.slice(4,6)+"/"+META.mcap.slice(6)+")":""}</span><b>${fmt(v)}</b></div>`).join("")}
+    <div class="per"><span>PER (최소 시총 ÷ LTM 지배순이익)</span><b>${r[12]!=null?r[12].toFixed(1)+"배":(ltm[2]!=null&&ltm[2]<=0?"적자":"—")}</b></div></div>`;
+  return `<div class="detail">${fin}${mc}</div>`;
+}
+
+/* ---------- render ---------- */
+function render(){
+  const t=S.target, has=!!t;
+  $("target").hidden=$("controls").hidden=$("ledger").hidden=$("bar").hidden=!has;
+  if(!has)return;
+  if(!t.code){$("target").innerHTML=`<div class="target-head"><span class="tag ${t.mkt}">${t.mkt}</span><h2>${esc(t.name)}</h2></div><div class="note">업종코드가 아직 없습니다.</div>`;$("controls").hidden=$("ledger").hidden=true;return;}
+  const lv=Math.min(S.level,t.code.length);
+  const lad=[2,3,4,5].filter(n=>n<=t.code.length).map(n=>{const cd=t.code.slice(0,n);return `<li class="${n===lv?"on":""}"><span class="lv">${LEVELS[n-2][1]}</span><span class="cd mono">${cd}</span><span>${esc(K[cd]||"—")}</span></li>`}).join("");
+  const tag=t.mkt?`<span class="tag ${t.mkt}">${t.mkt}</span>`:(t.unlisted?`<span class="tag UNL">비상장</span>`:"");
+  $("target").innerHTML=`<div class="target-head">${tag}<h2>${esc(t.name)}</h2>${t.ticker?`<span class="mono">${t.ticker}</span>`:""}</div>
+    <div><div class="src" style="margin-bottom:6px">표준산업분류 <b class="mono" style="color:var(--ink);font-size:1rem">${t.code}</b> · 출처 ${esc(t.src)}</div><ol class="ladder">${lad}</ol></div>
+    ${t.row&&t.row[5]?`<div class="src">주요제품: ${esc(t.row[5])}</div>`:""}
+    ${t.row?detailHtml(t.row).replace('class="detail"','class="detail" style="padding:0;background:none"'):""}`;
+  $("lvSeg").innerHTML=`<span class="lbl">비교 기준</span>`+LEVELS.map(([n,l])=>{const ok=n<=t.code.length;return `<button type="button" data-lv="${n}" aria-pressed="${n===lv}" ${ok?"":"disabled"}>${l} <span class="mono">${ok?t.code.slice(0,n):"—"}</span></button>`}).join("");
+  $("mkSeg").innerHTML=`<span class="lbl">시장</span>`+["KOSPI","KOSDAQ"].map(m=>`<button type="button" data-mk="${m}" aria-pressed="${S.mk[m]}">${m==="KOSPI"?"유가증권(KOSPI)":"코스닥(KOSDAQ)"}</button>`).join("");
+  renderList();
+}
+function renderList(){
+  const t=S.target, lv=Math.min(S.level,t.code.length), list=peers();
+  list.sort((a,b)=>(minMcap(b)||0)-(minMcap(a)||0));
+  S.list=list;
+  const nK=list.filter(c=>c[1]==="KOSPI").length;
+  $("ledTitle").textContent=`KSIC ${t.code.slice(0,lv)} ${K[t.code.slice(0,lv)]||""}`;
+  $("count").innerHTML=`<b>${list.length}</b>곳 · 유가 ${nK} · 코스닥 ${list.length-nK}`;
+  $("list").innerHTML=list.length?list.map(c=>`<div class="row${c[2]===t.ticker?" self":""}${S.open===c[2]?" open":""}"><button type="button" data-t="${c[2]}" aria-expanded="${S.open===c[2]}">
+      <span class="nm">${esc(c[0])}</span><span class="tk mono">${c[2]}</span>
+      <span class="meta"><span class="tag ${c[1]}">${c[1]}</span><span class="mono">${c[3]}</span><span class="kv">시총 <b class="mono">${fmt(c[11][0])}</b>억</span><span class="kv">PER <b class="mono">${c[12]!=null?c[12].toFixed(1):"—"}</b></span></span>
+    </button>${S.open===c[2]?detailHtml(c):""}</div>`).join("")
+    :`<div class="empty">조건에 맞는 상장사가 없습니다. 비교 기준을 넓혀 보세요.</div>`;
+  $("xl").disabled=!list.length; $("barMsg").textContent=list.length?`${list.length}개 기업 · 실적·시총·PER 포함`:"";
+}
+$("controls").addEventListener("click",e=>{
+  const b=e.target.closest("button"); if(!b||b.disabled)return;
+  if(b.dataset.lv){S.level=+b.dataset.lv;try{localStorage.setItem("peer.lv",S.level)}catch(e){}render();}
+  else if(b.dataset.mk){const m=b.dataset.mk;S.mk[m]=!S.mk[m];if(!S.mk.KOSPI&&!S.mk.KOSDAQ)S.mk[m==="KOSPI"?"KOSDAQ":"KOSPI"]=true;render();}
+});
+$("list").addEventListener("click",e=>{
+  const b=e.target.closest("button[data-t]"); if(!b)return;
+  S.open=S.open===b.dataset.t?null:b.dataset.t; renderList();
+});
+
+/* ---------- excel ---------- */
+$("xl").addEventListener("click",()=>{
+  const t=S.target, lv=Math.min(S.level,t.code.length), pre=t.code.slice(0,lv);
+  if(typeof XLSX==="undefined"){$("barMsg").textContent="엑셀 모듈을 불러오지 못했습니다. 새로고침 후 다시 시도하세요.";return;}
+  const cnt={}; S.list.forEach(c=>{if(c[8])cnt[c[8]]=(cnt[c[8]]||0)+1});
+  const main=Object.entries(cnt).sort((a,b)=>b[1]-a[1])[0]?.[0]||""; const L=qLabels(main);
+  const heads=["No","회사명","시장","종목코드","Ticker","KSIC","업종명(KSIC)","주요제품","재무기준","최근분기"];
+  const metrics=["매출액","영업이익","지배주주순이익"];
+  metrics.forEach(m=>{L.forEach((l,i)=>heads.push(`${m} ${l||"Q"+(i-3)}`));heads.push(`${m} LTM`);});
+  heads.push(`시총 어제(${META.mcap||""})`,"시총 1개월 평균","시총 3개월 평균","최소 시총","PER(최소시총/LTM 지배순이익)");
+  const aoa=[heads];
+  S.list.forEach((c,i)=>{
+    const row=[i+1,c[0],c[1]==="KOSPI"?"유가증권":"코스닥",c[2],c[2]+(c[1]==="KOSPI"?".KS":".KQ"),c[3],K[c[3]]||c[4],c[5]||"",c[7]||"",c[8]||""];
+    metrics.forEach((m,k)=>{for(let j=0;j<4;j++)row.push(c[9]?c[9][j][k]:null);row.push(c[10]?c[10][k]:null);});
+    row.push(c[11][0],c[11][1],c[11][2],minMcap(c),c[12]);
+    aoa.push(row);
+  });
+  const ws=XLSX.utils.aoa_to_sheet(aoa);
+  for(let r=1;r<aoa.length;r++){const a=XLSX.utils.encode_cell({r,c:3});if(ws[a])ws[a].t="s";}
+  ws["!cols"]=heads.map((h,i)=>({wch:i===1?22:i===6?30:i===7?36:i<6?9:13}));
+  ws["!autofilter"]={ref:XLSX.utils.encode_range({s:{r:0,c:0},e:{r:aoa.length-1,c:heads.length-1}})};
+  ws["!freeze"]={xSplit:2,ySplit:1};
+  const info=[["기준 기업",t.name],["기준 기업 종목코드",t.ticker||"(비상장)"],["기준 기업 KSIC",t.code+" "+(K[t.code]||"")],["비교 기준",`${LEVELS[lv-2][1]} ${pre} ${K[pre]||""}`],["시장",["KOSPI","KOSDAQ"].filter(m=>S.mk[m]).join(", ")],["기업 수",S.list.length],["금액 단위","억원"],["분기 실적","DART 정기보고서. 4분기 = 사업보고서 연간 − 3분기 누적. 연결 재무 우선, 없으면 별도"],["최근분기 열","기업별 최근 4개 분기. 대부분이 "+(main||"—")+" 기준이며, 다른 기업은 '최근분기' 열 참고"],["시가총액",`KRX 보통주 시가총액. 어제=${META.mcap||""}, 1·3개월 평균=해당 기간 거래일 평균`],["PER","세 시가총액 중 가장 작은 값 ÷ LTM 지배주주순이익 (적자면 빈칸)"],["상장사 목록",`KRX KIND ${META.kind||""}`],["데이터 갱신",META.built||""],["분류 체계","한국표준산업분류 제11차 (DART 기업개황 업종코드)"]];
+  const ws2=XLSX.utils.aoa_to_sheet(info); ws2["!cols"]=[{wch:18},{wch:80}];
+  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,"동종업종 상장사"); XLSX.utils.book_append_sheet(wb,ws2,"조회조건");
+  XLSX.writeFile(wb,`동종업종_${t.name.replace(/[\\/:*?"<>|\s]/g,"")}_KSIC${pre}.xlsx`);
+  $("barMsg").textContent="엑셀 파일을 만들었습니다.";
+});
+
+/* ---------- boot ---------- */
+fetch("data/listed.json").then(r=>r.json()).then(d=>{
+  K=d.k; C=d.c; META=d.meta||{};
+  $("loading").hidden=true;
+  $("foot").innerHTML=`상장사 ${C.length.toLocaleString()}곳 (유가·코스닥) · 데이터 갱신 ${esc(META.built||"")} · 시가총액 기준일 ${esc(META.mcap||"")} · 비상장 업종코드 ${Number(META.ksic_unlisted_done||0).toLocaleString()} / ${Number(META.unlisted_total||0).toLocaleString()}곳 수집<br>출처: KRX KIND 상장법인목록, DART 기업개황·정기보고서, KRX OpenAPI · 한국표준산업분류 제11차 · 금액 단위 억원 · 투자 판단 자료가 아닌 조회 도구입니다.`;
+  let q0="삼성전자"; try{q0=localStorage.getItem("peer.q")||q0}catch(e){}
+  $("q").value=q0; onSearch(q0);
+}).catch(()=>{$("loading").textContent="데이터를 불러오지 못했습니다. 잠시 후 새로고침하세요.";});
+</script>
+</body>
+</html>
