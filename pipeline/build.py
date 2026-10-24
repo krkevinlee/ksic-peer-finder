@@ -154,6 +154,32 @@ def periodic_filings(dart):
     return by
 
 
+def unlisted_priority(dart):
+    """비상장사 중 증권신고서(발행공시)·감사보고서 제출사 — 업종코드를 먼저 모을 대상."""
+    f = load("unl_prio.json", {"done_to": "", "C": {}, "F": {}})
+    for ty, days in (("C", 730), ("F", 400)):
+        start = TODAY - dt.timedelta(days=days)
+        if f["done_to"]:
+            start = max(start, dt.date.fromisoformat(f["done_to"]) - dt.timedelta(days=3))
+        cur = start
+        while cur <= TODAY:
+            end = min(cur + dt.timedelta(days=88), TODAY)
+            page = 1
+            while True:
+                j = dart("list.json", bgn_de=cur.strftime("%Y%m%d"), end_de=end.strftime("%Y%m%d"), corp_cls="E", pblntf_ty=ty, page_no=page, page_count=100)
+                if not j:
+                    break
+                for it in j["list"]:
+                    f[ty][it["corp_code"]] = max(f[ty].get(it["corp_code"], ""), it["rcept_dt"])
+                if page >= j["total_page"]:
+                    break
+                page += 1
+            cur = end + dt.timedelta(days=1)
+    f["done_to"] = TODAY.isoformat()
+    save("unl_prio.json", f)
+    return f
+
+
 # ---------------------------------------------------------------- financials
 def parse_report(nm, acc_mt):
     """'반기보고서 (2026.06)' -> ('H1', fiscal_year_label, period_end 'YYYY.MM')"""
@@ -422,7 +448,12 @@ def main():
     except LimitReached:
         filings = load("filings.json", {"by": {}})["by"]
     fin = build_fin(dart, listed, ksic, filings)
-    unl = sorted((r for r in corps if not r[2]), key=lambda r: r[3], reverse=True)
+    try:
+        prio = unlisted_priority(dart)
+    except LimitReached:
+        prio = load("unl_prio.json", {"C": {}, "F": {}})
+    rank = lambda r: (r[0] not in prio["C"], r[0] not in prio["F"], "".join(chr(255 - ord(ch)) for ch in r[3]))
+    unl = sorted((r for r in corps if not r[2]), key=rank)
     if not args.only:
         ksic = build_ksic(dart, [r[0] for r in unl], reserve=50)
     log("DART calls this run", dart.calls)
