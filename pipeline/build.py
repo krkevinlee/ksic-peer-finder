@@ -418,6 +418,28 @@ def mcap_stats(m, ticker):
     return m[last].get(ticker), avg(1), avg(3), last
 
 
+# ---------------------------------------------------------------- 5자리 보정
+def bigrams(t):
+    t = re.sub(r"[\s(),·/]", "", t or "")
+    return {t[i:i + 2] for i in range(len(t) - 1)}
+
+
+def to5(code, ticker, name, prod, K, est):
+    """DART 코드가 5자리 미만이면 하위 5자리 중 하나로 보정. (최종코드, DART 원래 코드 또는 '')"""
+    if not code or len(code) >= 5:
+        return code, ""
+    cand = [k for k in K if len(k) == 5 and k.startswith(code)]
+    if not cand:
+        return code, ""
+    if len(cand) == 1:
+        return cand[0], code
+    e = est.get(ticker)
+    if e in cand:
+        return e, code
+    words = bigrams(prod) | bigrams(name)  # 주요제품과 분류명 글자쌍 겹침이 가장 큰 코드
+    return max(cand, key=lambda k: (len(words & bigrams(K[k])), "기타" not in K[k], -int(k))), code
+
+
 # ---------------------------------------------------------------- main
 def main():
     ap = argparse.ArgumentParser()
@@ -429,6 +451,7 @@ def main():
         sys.exit("DART_API_KEY / KRX_API_KEY 가 필요합니다")
     dart = Dart(dkey, args.budget)
     K = json.load(open(os.path.join(ROOT, "pipeline", "ksic11.json"), encoding="utf-8"))
+    EST = json.load(open(os.path.join(ROOT, "pipeline", "ksic_est.json"), encoding="utf-8"))  # DART 미등록 5자리 추정치
 
     kind, kind_date = kind_list()
     log("KIND rows", len(kind), kind_date)
@@ -465,6 +488,7 @@ def main():
     rows, mdate = [], ""
     for c in listed:
         kc = (ksic.get(c["corp"]) or [""])[0]
+        kc, dart_short = to5(kc, c["ticker"], c["name"], c["prod"], K, EST)
         e = fin.get(c["corp"])
         q = labels = ltm = None
         fs = ""
@@ -478,7 +502,7 @@ def main():
         mdate = mdate or mdate_c
         mins = [x for x in (m0, m1, m3) if x]
         per = round(min(mins) / ltm[2], 1) if (mins and ltm and ltm[2] and ltm[2] > 0) else None
-        rows.append([c["name"], c["mkt"], c["ticker"], kc, c["ind"], c["prod"], c["corp"], fs, labels[-1] if labels else "", q, ltm, [m0, m1, m3], per])
+        rows.append([c["name"], c["mkt"], c["ticker"], kc, c["ind"], c["prod"], c["corp"], fs, labels[-1] if labels else "", q, ltm, [m0, m1, m3], per, dart_short])
     unlisted = [[r[1], r[0], (ksic.get(r[0]) or [""])[0]] for r in corps if not r[2]]
     meta = {"built": dt.datetime.now(KST).strftime("%Y-%m-%d %H:%M"), "kind": kind_date, "mcap": mdate,
             "ksic_unlisted_done": sum(1 for r in unlisted if r[1] in ksic), "unlisted_total": len(unlisted)}

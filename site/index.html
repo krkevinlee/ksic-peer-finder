@@ -222,7 +222,7 @@ $("sugg").addEventListener("click",e=>{
 /* ---------- target ---------- */
 function setTarget(t){S.target=t;S.open=null;$("sugg").hidden=true;$("hint").textContent="";render();}
 function selectCode(cd){setTarget({name:K[cd],code:cd,src:"직접 입력한 KSIC 코드"})}
-function selectListed(c){setTarget({name:c[0],ticker:c[2],mkt:c[1],code:c[3]||"",row:c,src:"DART 기업개황"})}
+function selectListed(c){setTarget({name:c[0],ticker:c[2],mkt:c[1],code:c[3]||"",row:c,src:c[13]?`주요제품 기준 추정 (DART에는 ${c[13]}까지만 등록)`:"DART 기업개황"})}
 function selectUnlisted(r){
   if(!r[2]){$("hint").textContent=`${r[0]}의 업종코드는 아직 수집 전입니다. KSIC 코드를 알면 직접 입력하세요 (매일 조금씩 채워집니다).`;$("sugg").hidden=true;return;}
   setTarget({name:r[0],code:r[2],unlisted:true,src:"DART 기업개황"});
@@ -271,7 +271,7 @@ function renderList(){
   $("count").innerHTML=`<b>${list.length}</b>곳 · 유가 ${nK} · 코스닥 ${list.length-nK}`;
   $("list").innerHTML=list.length?list.map(c=>`<div class="row${c[2]===t.ticker?" self":""}${S.open===c[2]?" open":""}"><button type="button" data-t="${c[2]}" aria-expanded="${S.open===c[2]}">
       <span class="nm">${esc(c[0])}</span><span class="tk mono">${c[2]}</span>
-      <span class="meta"><span class="tag ${c[1]}">${c[1]}</span><span class="mono">${c[3]}</span><span class="kv">시총 <b class="mono">${fmt(c[11][0])}</b>억</span><span class="kv">PER <b class="mono">${c[12]!=null?c[12].toFixed(1):"—"}</b></span></span>
+      <span class="meta"><span class="tag ${c[1]}">${c[1]}</span><span class="mono">${c[3]}</span>${c[13]?`<span class="tag UNL" title="DART에는 ${c[13]}까지만 등록, 주요제품 기준 추정">추정</span>`:""}<span class="kv">시총 <b class="mono">${fmt(c[11][0])}</b>억</span><span class="kv">PER <b class="mono">${c[12]!=null?c[12].toFixed(1):"—"}</b></span></span>
     </button>${S.open===c[2]?detailHtml(c):""}</div>`).join("")
     :`<div class="empty">조건에 맞는 상장사가 없습니다. 비교 기준을 넓혀 보세요.</div>`;
   $("xl").disabled=!list.length; $("barMsg").textContent=list.length?`${list.length}개 기업 · 실적·시총·PER 포함`:"";
@@ -292,23 +292,23 @@ $("xl").addEventListener("click",()=>{
   if(typeof XLSX==="undefined"){$("barMsg").textContent="엑셀 모듈을 불러오지 못했습니다. 새로고침 후 다시 시도하세요.";return;}
   const cnt={}; S.list.forEach(c=>{if(c[8])cnt[c[8]]=(cnt[c[8]]||0)+1});
   const main=Object.entries(cnt).sort((a,b)=>b[1]-a[1])[0]?.[0]||""; const L=qLabels(main);
-  const heads=["No","회사명","시장","종목코드","Ticker","KSIC","업종명(KSIC)","주요제품","재무기준","최근분기"];
+  const heads=["No","회사명","시장","종목코드","Ticker","KSIC","업종명(KSIC)","KSIC 출처","주요제품","재무기준","최근분기"];
   const metrics=["매출액","영업이익","지배주주순이익"];
   metrics.forEach(m=>{L.forEach((l,i)=>heads.push(`${m} ${l||"Q"+(i-3)}`));heads.push(`${m} LTM`);});
   heads.push(`시총 어제(${META.mcap||""})`,"시총 1개월 평균","시총 3개월 평균","최소 시총","PER(최소시총/LTM 지배순이익)");
   const aoa=[heads];
   S.list.forEach((c,i)=>{
-    const row=[i+1,c[0],c[1]==="KOSPI"?"유가증권":"코스닥",c[2],c[2]+(c[1]==="KOSPI"?".KS":".KQ"),c[3],K[c[3]]||c[4],c[5]||"",c[7]||"",c[8]||""];
+    const row=[i+1,c[0],c[1]==="KOSPI"?"유가증권":"코스닥",c[2],c[2]+(c[1]==="KOSPI"?".KS":".KQ"),c[3],K[c[3]]||c[4],c[13]?`추정 (DART ${c[13]}까지 등록)`:"DART",c[5]||"",c[7]||"",c[8]||""];
     metrics.forEach((m,k)=>{for(let j=0;j<4;j++)row.push(c[9]?c[9][j][k]:null);row.push(c[10]?c[10][k]:null);});
     row.push(c[11][0],c[11][1],c[11][2],minMcap(c),c[12]);
     aoa.push(row);
   });
   const ws=XLSX.utils.aoa_to_sheet(aoa);
   for(let r=1;r<aoa.length;r++){const a=XLSX.utils.encode_cell({r,c:3});if(ws[a])ws[a].t="s";}
-  ws["!cols"]=heads.map((h,i)=>({wch:i===1?22:i===6?30:i===7?36:i<6?9:13}));
+  ws["!cols"]=heads.map((h,i)=>({wch:i===1?22:i===6?30:i===7?18:i===8?36:i<6?9:13}));
   ws["!autofilter"]={ref:XLSX.utils.encode_range({s:{r:0,c:0},e:{r:aoa.length-1,c:heads.length-1}})};
   ws["!freeze"]={xSplit:2,ySplit:1};
-  const info=[["기준 기업",t.name],["기준 기업 종목코드",t.ticker||"(비상장)"],["기준 기업 KSIC",t.code+" "+(K[t.code]||"")],["비교 기준",`${LEVELS[lv-2][1]} ${pre} ${K[pre]||""}`],["시장",["KOSPI","KOSDAQ"].filter(m=>S.mk[m]).join(", ")],["기업 수",S.list.length],["금액 단위","억원"],["분기 실적","DART 정기보고서. 4분기 = 사업보고서 연간 − 3분기 누적. 연결 재무 우선, 없으면 별도"],["최근분기 열","기업별 최근 4개 분기. 대부분이 "+(main||"—")+" 기준이며, 다른 기업은 '최근분기' 열 참고"],["시가총액",`KRX 보통주 시가총액. 어제=${META.mcap||""}, 1·3개월 평균=해당 기간 거래일 평균`],["PER","세 시가총액 중 가장 작은 값 ÷ LTM 지배주주순이익 (적자면 빈칸)"],["상장사 목록",`KRX KIND ${META.kind||""}`],["데이터 갱신",META.built||""],["분류 체계","한국표준산업분류 제11차 (DART 기업개황 업종코드)"]];
+  const info=[["기준 기업",t.name],["기준 기업 종목코드",t.ticker||"(비상장)"],["기준 기업 KSIC",t.code+" "+(K[t.code]||"")],["비교 기준",`${LEVELS[lv-2][1]} ${pre} ${K[pre]||""}`],["시장",["KOSPI","KOSDAQ"].filter(m=>S.mk[m]).join(", ")],["기업 수",S.list.length],["금액 단위","억원"],["분기 실적","DART 정기보고서. 4분기 = 사업보고서 연간 − 3분기 누적. 연결 재무 우선, 없으면 별도"],["최근분기 열","기업별 최근 4개 분기. 대부분이 "+(main||"—")+" 기준이며, 다른 기업은 '최근분기' 열 참고"],["시가총액",`KRX 보통주 시가총액. 어제=${META.mcap||""}, 1·3개월 평균=해당 기간 거래일 평균`],["PER","세 시가총액 중 가장 작은 값 ÷ LTM 지배주주순이익 (적자면 빈칸)"],["상장사 목록",`KRX KIND ${META.kind||""}`],["데이터 갱신",META.built||""],["분류 체계","한국표준산업분류 제11차 (DART 기업개황 업종코드)"],["KSIC 출처","DART에 5자리 미만으로만 등록된 기업은 등록된 상위 코드 안에서 주요제품 기준으로 5자리를 추정 ('추정' 표시)"]];
   const ws2=XLSX.utils.aoa_to_sheet(info); ws2["!cols"]=[{wch:18},{wch:80}];
   const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,"동종업종 상장사"); XLSX.utils.book_append_sheet(wb,ws2,"조회조건");
   XLSX.writeFile(wb,`동종업종_${t.name.replace(/[\\/:*?"<>|\s]/g,"")}_KSIC${pre}.xlsx`);
